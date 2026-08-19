@@ -1,4 +1,7 @@
 # Snake Race — ARSW Lab #2 (Java 21, Virtual Threads)
+# Mariana Malagón y Paula Lozano
+
+### Nota: El documento de reportes está en la carpeta docs y se llama ARSW_LAB2 es un pdf
 
 **Escuela Colombiana de Ingeniería – Arquitecturas de Software**  
 Laboratorio de programación concurrente: condiciones de carrera, sincronización y colecciones seguras.
