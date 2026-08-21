@@ -22,9 +22,12 @@ public final class SnakeRunner implements Runnable {
   public void run() {
     try {
       while (!Thread.currentThread().isInterrupted()) {
+        board.awaitIfPaused();
         maybeTurn();
         var res = board.step(snake);
-        if (res == Board.MoveResult.HIT_OBSTACLE) {
+        if (res == Board.MoveResult.DIED) {
+          break;
+        } else if (res == Board.MoveResult.HIT_OBSTACLE) {
           randomTurn();
         } else if (res == Board.MoveResult.ATE_TURBO) {
           turboTicks = 100;

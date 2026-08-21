@@ -10,6 +10,7 @@ import co.eci.snake.core.engine.GameClock;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -35,7 +36,7 @@ public final class SnakeApp extends JFrame {
     }
 
     this.gamePanel = new GamePanel(board, () -> snakes);
-    this.actionButton = new JButton("Action");
+    this.actionButton = new JButton("Iniciar");
 
     setLayout(new BorderLayout());
     add(gamePanel, BorderLayout.CENTER);
@@ -47,16 +48,13 @@ public final class SnakeApp extends JFrame {
 
     this.clock = new GameClock(60, () -> SwingUtilities.invokeLater(gamePanel::repaint));
 
-    var exec = Executors.newVirtualThreadPerTaskExecutor();
-    snakes.forEach(s -> exec.submit(new SnakeRunner(s, board)));
-
-    actionButton.addActionListener((ActionEvent e) -> togglePause());
+    actionButton.addActionListener((ActionEvent e) -> onAction());
 
     gamePanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("SPACE"), "pause");
     gamePanel.getActionMap().put("pause", new AbstractAction() {
       @Override
       public void actionPerformed(ActionEvent e) {
-        togglePause();
+        onAction();
       }
     });
 
@@ -125,17 +123,62 @@ public final class SnakeApp extends JFrame {
     }
 
     setVisible(true);
+  }
+
+  private void onAction() {
+    switch (actionButton.getText()) {
+      case "Iniciar" -> {
+        startGame();
+        actionButton.setText("Pausar");
+      }
+      case "Pausar" -> {
+        pauseAndShowStats();
+        actionButton.setText("Reanudar");
+      }
+      default -> {
+        board.resumeSnakes();
+        clock.resume();
+        actionButton.setText("Pausar");
+      }
+    }
+  }
+
+  private void startGame() {
+    var exec = Executors.newVirtualThreadPerTaskExecutor();
+    snakes.forEach(s -> exec.submit(new SnakeRunner(s, board)));
     clock.start();
   }
 
-  private void togglePause() {
-    if ("Action".equals(actionButton.getText())) {
-      actionButton.setText("Resume");
-      clock.pause();
-    } else {
-      actionButton.setText("Action");
-      clock.resume();
+  private void pauseAndShowStats() {
+    clock.pause();
+
+    int aliveCount = (int) snakes.stream().filter(Snake::isAlive).count();
+    board.pauseSnakes(aliveCount);
+    try {
+      board.awaitAllPaused(500);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
     }
+
+    Snake longestAlive = snakes.stream()
+        .filter(Snake::isAlive)
+        .max(Comparator.comparingInt(Snake::length))
+        .orElse(null);
+    Snake worstSnake = snakes.stream()
+        .filter(s -> !s.isAlive())
+        .min(Comparator.comparingLong(Snake::deathOrder))
+        .orElse(null);
+
+    String longestMsg = (longestAlive != null)
+        ? "Serpiente #" + snakes.indexOf(longestAlive) + " (longitud " + longestAlive.length() + ")"
+        : "Ninguna serpiente viva";
+    String worstMsg = (worstSnake != null)
+        ? "Serpiente #" + snakes.indexOf(worstSnake)
+        : "Ninguna serpiente ha muerto todavía";
+
+    JOptionPane.showMessageDialog(this,
+        "Serpiente viva más larga: " + longestMsg + "\nPeor serpiente (primera en morir): " + worstMsg,
+        "Juego pausado", JOptionPane.INFORMATION_MESSAGE);
   }
 
   public static final class GamePanel extends JPanel {

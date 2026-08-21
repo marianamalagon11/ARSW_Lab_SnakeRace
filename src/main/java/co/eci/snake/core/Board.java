@@ -5,7 +5,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 public final class Board {
   private final int width;
@@ -16,7 +18,10 @@ public final class Board {
   private final Set<Position> turbo = new HashSet<>();
   private final Map<Position, Position> teleports = new HashMap<>();
 
-  public enum MoveResult { MOVED, ATE_MOUSE, HIT_OBSTACLE, ATE_TURBO, TELEPORTED }
+  private boolean paused = false;
+  private CountDownLatch pauseConfirmations = new CountDownLatch(0);
+
+  public enum MoveResult { MOVED, ATE_MOUSE, HIT_OBSTACLE, ATE_TURBO, TELEPORTED, DIED }
 
   public Board(int width, int height) {
     if (width <= 0 || height <= 0) throw new IllegalArgumentException("Board dimensions must be positive");
@@ -50,6 +55,11 @@ public final class Board {
       teleported = true;
     }
 
+    if (snake.snapshot().contains(next)) {
+      snake.kill();
+      return MoveResult.DIED;
+    }
+
     boolean ateMouse = mice.remove(next);
     boolean ateTurbo = turbo.remove(next);
 
@@ -65,6 +75,33 @@ public final class Board {
     if (ateMouse) return MoveResult.ATE_MOUSE;
     if (teleported) return MoveResult.TELEPORTED;
     return MoveResult.MOVED;
+  }
+
+  public synchronized void pauseSnakes(int activeRunners) {
+    paused = true;
+    pauseConfirmations = new CountDownLatch(activeRunners);
+  }
+
+  public synchronized void resumeSnakes() {
+    paused = false;
+    notifyAll();
+  }
+
+  public synchronized void awaitIfPaused() throws InterruptedException {
+    if (paused) {
+      pauseConfirmations.countDown();
+      while (paused) {
+        wait();
+      }
+    }
+  }
+
+  public boolean awaitAllPaused(long timeoutMillis) throws InterruptedException {
+    CountDownLatch latch;
+    synchronized (this) {
+      latch = pauseConfirmations;
+    }
+    return latch.await(timeoutMillis, TimeUnit.MILLISECONDS);
   }
 
   private void createTeleportPairs(int pairs) {
